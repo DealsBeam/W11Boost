@@ -386,6 +386,122 @@ pub fn set_string(hkey: &HKEY, subkey: &str, value_name: &str, value: &str) -> R
         Ok(())
 }
 
+// ⚡ Bolt: By batching registry writes into a single key opening,
+// we reduce system call overhead and improve performance.
+pub fn set_multiple_dwords(hkey: &HKEY, subkey: &str, values: &[(&str, u32)]) -> Result<()>
+{
+	let hkey_text = get_hkey_text(hkey);
+
+	for (value_name, _) in values {
+		registry_backup(hkey, subkey, value_name, false)?;
+	}
+
+	let (key, _) = hkey
+		.RegCreateKeyEx(subkey, None, co::REG_OPTION::NON_VOLATILE, co::KEY::WRITE, None)
+		.map_err(|source| {
+			anyhow!(
+				"Failed to open DWORD registry key for batch write: {}\\{}\nError: {}",
+				hkey_text,
+				subkey,
+				source
+			)
+		})?;
+
+	for (value_name, value) in values {
+		key.RegSetValueEx(Some(*value_name), RegistryValue::Dword(*value))
+			.map_err(|source| {
+				anyhow!(
+					"Failed to set DWORD registry value: {}\\{}\\{} = {}\nError: {}",
+					hkey_text,
+					subkey,
+					value_name,
+					value,
+					source
+				)
+			})?;
+
+		log_registry(hkey, subkey, value_name, &value.to_string(), "DWORD").map_err(|e| {
+			anyhow!(
+				"Failed to log DWORD change for key: {}\\{}\\{} -> {}\nError: {}",
+				hkey_text,
+				subkey,
+				value_name,
+				value,
+				e
+			)
+		})?;
+	}
+
+	Ok(())
+}
+
+// ⚡ Bolt: By batching registry writes into a single key opening,
+// we reduce system call overhead and improve performance.
+pub fn set_multiple_strings(hkey: &HKEY, subkey: &str, values: &[(&str, &str)]) -> Result<()>
+{
+	let hkey_text = get_hkey_text(hkey);
+
+	for (value_name, _) in values {
+		registry_backup(hkey, subkey, value_name, false)?;
+	}
+
+	let (key, _) = hkey
+		.RegCreateKeyEx(subkey, None, co::REG_OPTION::NON_VOLATILE, co::KEY::WRITE, None)
+		.map_err(|source| {
+			anyhow!(
+				"Failed to open Sz registry key for batch write: {}\\{}\nError: {}",
+				hkey_text,
+				subkey,
+				source
+			)
+		})?;
+
+	for (value_name, value) in values {
+		// Use raw Windows API for all strings to handle empty strings correctly.
+		// winsafe's RegistryValue::Sz doesn't handle empty strings (ERROR 998).
+		let wide_value_name: Vec<u16> = value_name.encode_utf16().chain(std::iter::once(0)).collect();
+		let wide_value: Vec<u16> = value.encode_utf16().chain(std::iter::once(0)).collect();
+		let byte_len = wide_value.len() * 2;
+
+		let result = unsafe {
+			RegSetValueExW(
+				windows::Win32::System::Registry::HKEY(key.ptr() as *mut _),
+				windows::core::PCWSTR(wide_value_name.as_ptr()),
+				None,
+				REG_SZ,
+				Some(std::slice::from_raw_parts(
+					wide_value.as_ptr() as *const u8,
+					byte_len,
+				)),
+			)
+		};
+
+		if result.is_err() {
+			return Err(anyhow!(
+				"Failed to set Sz registry value: {}\\{}\\{} = {}\nError: {}",
+				hkey_text,
+				subkey,
+				value_name,
+				value,
+				result.0
+			));
+		}
+
+		log_registry(hkey, subkey, value_name, value, "String").map_err(|e| {
+			anyhow!(
+				"Failed to log Sz change for key: {}\\{}\\{} -> {}\nError: {}",
+				hkey_text,
+				subkey,
+				value_name,
+				value,
+				e
+			)
+		})?;
+	}
+
+	Ok(())
+}
+
 pub fn remove_subkey(hkey: &HKEY, subkey: &str) -> Result<()>
 {
         let hkey_text = get_hkey_text(hkey);

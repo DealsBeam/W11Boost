@@ -4,5 +4,6 @@ pub mod common;
 
 pub use common::{
 	check_dword, delete_value, get_windows_path, registry_backup, remove_subkey, restore_from_backup,
-	run_system_command, set_dword, set_string, CREATE_NO_WINDOW,
+	run_system_command, set_dword, set_multiple_dwords, set_multiple_strings, set_string,
+	CREATE_NO_WINDOW,
 };
