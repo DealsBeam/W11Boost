@@ -239,22 +239,43 @@ pub const ENV_VARS: &[(&str, &str)] = &[
         ("HOMEBREW_NO_ANALYTICS_THIS_RUN", "1"),
 ];
 
+use std::collections::HashMap;
+
+use w11boost::{set_dword, set_multiple_dwords, set_multiple_strings, set_string};
+
+// ... (rest of the file remains the same)
+
 pub fn run() -> Result<()>
 {
-        let hkcu = HKEY::CURRENT_USER;
-        let hklm = HKEY::LOCAL_MACHINE;
-        let env_path = r"Environment";
+	let hkcu = HKEY::CURRENT_USER;
+	let hklm = HKEY::LOCAL_MACHINE;
+	let env_path = r"Environment";
 
-        // Set environment variables
-        for (var_name, value) in ENV_VARS {
-                set_string(&hkcu, env_path, var_name, value)?;
-        }
+	// ⚡ Bolt: Group environment variables by subkey to batch registry writes.
+	let mut env_vars_by_key = HashMap::new();
+	env_vars_by_key.entry(env_path).or_insert_with(Vec::new).extend(
+		ENV_VARS
+			.iter()
+			.map(|(name, val)| (*name, *val)),
+	);
 
-        // Set registry DWORD values
-        for (hkey_str, subkey, value_name, value) in REGISTRY_DWORDS {
-                let hkey = if *hkey_str == "HKLM" { &hklm } else { &hkcu };
-                set_dword(hkey, subkey, value_name, *value)?;
-        }
+	for (subkey, values) in env_vars_by_key {
+		set_multiple_strings(&hkcu, subkey, &values)?;
+	}
 
-        Ok(())
+	// ⚡ Bolt: Group dword settings by HKEY and subkey to batch registry writes.
+	let mut dwords_by_key = HashMap::new();
+	for (hkey_str, subkey, value_name, value) in REGISTRY_DWORDS {
+		let hkey = if *hkey_str == "HKLM" { &hklm } else { &hkcu };
+		dwords_by_key
+			.entry((hkey.clone(), *subkey))
+			.or_insert_with(Vec::new)
+			.push((*value_name, *value));
+	}
+
+	for ((hkey, subkey), values) in dwords_by_key {
+		set_multiple_dwords(&hkey, subkey, &values)?;
+	}
+
+	Ok(())
 }
