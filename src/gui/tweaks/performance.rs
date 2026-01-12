@@ -139,15 +139,6 @@ pub static PERFORMANCE_TWEAKS: &[Tweak] = &[
         ],
                 },
         crate::tweak! {
-                id: "disable_last_access",
-                category: "performance",
-                name: "Disable NTFS Last Access Update",
-                description: "Disables updating the 'Last Accessed' timestamp on files to improve disk performance.",
-                enabled_ops: &[
-                        crate::reg_dword!("HKLM", r"SYSTEM\CurrentControlSet\Control\FileSystem", "NtfsDisableLastAccessUpdate", 1),
-                ],
-        },
-        crate::tweak! {
                 id: "disable_paging_executive",
                 category: "performance",
                 name: "Disable Paging Executive",
