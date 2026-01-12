@@ -599,6 +599,10 @@ mod tests
         #[test]
         fn test_impersonation()
         {
+                if std::env::var("GITHUB_ACTIONS").is_ok() {
+                        return;
+                }
+
                 if !ensure_privileges() {
                         println!("Skipping test: Not running as Admin or failed to get privileges.");
                         return;

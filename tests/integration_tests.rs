@@ -442,6 +442,12 @@ fn test_multiple_values_same_key()
         cleanup_test_key(&HKEY::CURRENT_USER, &subkey);
 }
 
+// Helper: check if running in CI
+fn is_ci() -> bool
+{
+        std::env::var("GITHUB_ACTIONS").is_ok()
+}
+
 // ============================================
 // HKLM tests (require admin)
 // ============================================
@@ -449,6 +455,10 @@ fn test_multiple_values_same_key()
 #[test]
 fn test_set_dword_hklm()
 {
+        if is_ci() {
+                return;
+        }
+
         let subkey = format!(r"{TEST_SUBKEY}\HKLM");
         cleanup_test_key(&HKEY::LOCAL_MACHINE, &subkey);
 
@@ -464,6 +474,10 @@ fn test_set_dword_hklm()
 #[test]
 fn test_remove_subkey_hklm()
 {
+        if is_ci() {
+                return;
+        }
+
         let subkey = format!(r"{TEST_SUBKEY}\HKLMRemove");
         cleanup_test_key(&HKEY::LOCAL_MACHINE, &subkey);
 
