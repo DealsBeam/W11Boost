@@ -115,3 +115,44 @@ impl WorkerContext
                 self.ctx.request_repaint();
         }
 }
+
+#[cfg(test)]
+mod tests
+{
+        use super::*;
+
+        #[test]
+        fn test_shared_state_default()
+        {
+                let state = SharedState::default();
+                assert_eq!(state.progress, 0.0);
+                assert_eq!(state.total_ops, 0);
+                assert_eq!(state.completed_ops, 0);
+                assert!(state.status_message.is_empty());
+                assert!(state.log_messages.is_empty());
+                assert!(!state.is_running);
+                assert!(!state.is_complete);
+                assert!(state.error.is_none());
+        }
+
+        #[test]
+        fn test_shared_state_reset()
+        {
+                let mut state = SharedState::default();
+                // modify state
+                state.progress = 0.5;
+                state.status_message = "Old".to_string();
+                state.is_complete = true;
+
+                state.reset(100);
+
+                assert_eq!(state.total_ops, 100);
+                assert_eq!(state.progress, 0.0);
+                assert_eq!(state.completed_ops, 0);
+                assert!(state.status_message.is_empty());
+                assert!(state.log_messages.is_empty());
+                assert!(state.is_running);
+                assert!(!state.is_complete);
+                assert!(state.error.is_none());
+        }
+}

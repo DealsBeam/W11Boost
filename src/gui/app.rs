@@ -85,15 +85,12 @@ impl W11BoostApp
                 let _ = config.save_default();
         }
 
-        fn count_enabled_tweaks(&self) -> usize
+        pub(crate) fn count_enabled_tweaks(&self) -> usize
         {
-                get_all_tweaks()
-                        .iter()
-                        .filter(|t| self.tweak_states.states.get(t.id).copied().unwrap_or(false))
-                        .count()
+                self.get_enabled_tweaks().len()
         }
 
-        fn get_enabled_tweaks(&self) -> Vec<&'static Tweak>
+        pub(crate) fn get_enabled_tweaks(&self) -> Vec<&'static Tweak>
         {
                 get_all_tweaks()
                         .into_iter()
@@ -273,7 +270,7 @@ impl W11BoostApp
                 self.search_query = state.search_query;
         }
 
-        fn navigate_to(&mut self, mode: ViewMode, category: Option<String>, tweak: Option<String>)
+        pub(crate) fn navigate_to(&mut self, mode: ViewMode, category: Option<String>, tweak: Option<String>)
         {
                 // Capture current state
                 let current = self.current_nav_state();
@@ -283,7 +280,7 @@ impl W11BoostApp
                         mode,
                         selected_category: category.clone(),
                         selected_tweak: tweak.clone(),
-                        search_query: self.search_query.clone(), // Preserve search query by default
+                        search_query: self.search_query.clone(),
                 };
 
                 if current != new_state {
@@ -293,7 +290,7 @@ impl W11BoostApp
                 }
         }
 
-        fn navigate_back(&mut self)
+        pub(crate) fn navigate_back(&mut self)
         {
                 if let Some(prev) = self.back_stack.pop() {
                         let current = self.current_nav_state();
@@ -302,7 +299,7 @@ impl W11BoostApp
                 }
         }
 
-        fn navigate_forward(&mut self)
+        pub(crate) fn navigate_forward(&mut self)
         {
                 if let Some(next) = self.forward_stack.pop() {
                         let current = self.current_nav_state();
@@ -381,7 +378,7 @@ impl W11BoostApp
                 });
         }
 
-        fn get_visible_tweaks(&self, tweaks: Vec<&'static Tweak>) -> Vec<&'static Tweak>
+        pub(crate) fn get_visible_tweaks(&self, tweaks: Vec<&'static Tweak>) -> Vec<&'static Tweak>
         {
                 if self.search_query.is_empty() {
                         return tweaks;
@@ -1460,4 +1457,98 @@ impl eframe::App for W11BoostApp
                 self.render_bottom_panel(ctx, main_bg_color);
                 self.render_central_panel(ctx, main_bg_color);
         }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::{Arc, Mutex};
+    use crate::gui::state::{TweakStates, SelectionState, ViewMode};
+    use crate::gui::shared_state::SharedState;
+
+    // Helper to create a testable app instance (without eframe context)
+    fn create_test_app() -> W11BoostApp {
+        W11BoostApp {
+            mode: ViewMode::Tweaks,
+            selection: SelectionState::default(),
+            tweak_states: TweakStates::default(),
+            show_log_panel: false,
+            search_query: String::new(),
+            shared: Arc::new(Mutex::new(SharedState::default())),
+            dark_mode_enforced: false,
+            input_search_query: String::new(),
+            input_search_visible: false,
+            back_stack: Vec::new(),
+            forward_stack: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn test_navigation_stack() {
+        let mut app = create_test_app();
+
+        // Initial state
+        assert_eq!(app.mode, ViewMode::Tweaks);
+        assert!(app.back_stack.is_empty());
+
+        // Navigate to new category
+        app.navigate_to(ViewMode::Tweaks, Some("boot".to_string()), None);
+        assert_eq!(app.selection.selected_category.as_deref(), Some("boot"));
+        assert_eq!(app.back_stack.len(), 1); // Previous state (None) pushed
+
+        // Navigate to specific tweak
+        app.navigate_to(ViewMode::Tweaks, Some("boot".to_string()), Some("disable_lock_screen".to_string()));
+        assert_eq!(app.selection.selected_tweak.as_deref(), Some("disable_lock_screen"));
+        assert_eq!(app.back_stack.len(), 2);
+
+        // Go Back
+        app.navigate_back();
+        assert_eq!(app.selection.selected_tweak, None); // Should be back at category
+        assert_eq!(app.selection.selected_category.as_deref(), Some("boot"));
+        assert_eq!(app.back_stack.len(), 1);
+        assert_eq!(app.forward_stack.len(), 1);
+
+        // Go Forward
+        app.navigate_forward();
+        assert_eq!(app.selection.selected_tweak.as_deref(), Some("disable_lock_screen"));
+        assert_eq!(app.forward_stack.len(), 0);
+    }
+
+    #[test]
+    fn test_search_filtering() {
+        let mut app = create_test_app();
+        // Just grab some tweaks to test filtering logic
+        let tweaks = crate::gui::tweaks::BOOT_TWEAKS.iter().collect::<Vec<_>>();
+        
+        app.search_query = "Lock Screen".to_string();
+        let visible = app.get_visible_tweaks(tweaks.clone());
+        assert!(!visible.is_empty());
+        assert!(visible.iter().any(|t| t.name.contains("Lock Screen")));
+        
+        app.search_query = "NonExistentTweakNameXYZ".to_string();
+        let visible = app.get_visible_tweaks(tweaks.clone());
+        assert!(visible.is_empty());
+
+        app.search_query = String::new();
+        let visible = app.get_visible_tweaks(tweaks);
+        assert!(visible.len() > 0);
+    }
+
+    #[test]
+    fn test_enabled_tweaks_counting() {
+        let mut app = create_test_app();
+        
+        // Ensure accurate initial count (defaults are enabled)
+        let initial_count = app.count_enabled_tweaks();
+        assert!(initial_count > 0);
+
+        // Enable all tweaks artificially
+        for tweak in crate::gui::tweaks::get_all_tweaks() {
+            app.tweak_states.states.insert(tweak.id.to_string(), true);
+        }
+        
+        let all_count = crate::gui::tweaks::get_all_tweaks().len();
+        assert_eq!(app.count_enabled_tweaks(), all_count);
+        assert_eq!(app.get_enabled_tweaks().len(), all_count);
+    }
 }

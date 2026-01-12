@@ -70,3 +70,39 @@ impl TweakConfig
                 }
         }
 }
+
+#[cfg(test)]
+mod tests
+{
+        use super::*;
+        use std::collections::HashMap;
+
+        #[test]
+        fn test_config_new()
+        {
+                let mut tweaks = HashMap::new();
+                tweaks.insert("tweak1".to_string(), true);
+                let mut inputs = HashMap::new();
+                inputs.insert("key1".to_string(), "val1".to_string());
+
+                let config = TweakConfig::new(tweaks.clone(), inputs.clone());
+                assert_eq!(config.tweaks, tweaks);
+                assert_eq!(config.input_values, inputs);
+        }
+
+        #[test]
+        fn test_config_serialization()
+        {
+                let mut tweaks = HashMap::new();
+                tweaks.insert("t1".to_string(), true);
+                tweaks.insert("t2".to_string(), false);
+
+                let config = TweakConfig::new(tweaks, HashMap::new());
+
+                let json = serde_json::to_string(&config).unwrap();
+                let loaded: TweakConfig = serde_json::from_str(&json).unwrap();
+
+                assert_eq!(config.tweaks, loaded.tweaks);
+                assert_eq!(config.input_values, loaded.input_values);
+        }
+}

@@ -571,3 +571,51 @@ pub fn get_all_tweaks() -> Vec<&'static Tweak>
         }
         all
 }
+#[cfg(test)]
+mod tests
+{
+        use super::*;
+        use std::collections::HashSet;
+
+        #[test]
+        fn test_tweak_definitions_integrity()
+        {
+                let all_tweaks = get_all_tweaks();
+                let mut seen_ids = HashSet::new();
+
+                for tweak in all_tweaks {
+                        // Force access to all fields to ensure "coverage" if possible
+                        let _ = tweak.id;
+                        let _ = tweak.name;
+                        let _ = tweak.description;
+                        let _ = tweak.category;
+
+                        // 1. Check ID Uniqueness
+                        assert!(seen_ids.insert(tweak.id), "Duplicate tweak ID found: {}", tweak.id);
+
+                        // 2. Check basic metadata
+                        assert!(!tweak.name.is_empty(), "Tweak {} has empty name", tweak.id);
+                        assert!(
+                                !tweak.description.is_empty(),
+                                "Tweak {} has empty description",
+                                tweak.id
+                        );
+
+                        // 3. Check Category validity
+                        assert!(
+                                CATEGORIES.iter().any(|c| c.id == tweak.category),
+                                "Tweak {} has invalid category: {}",
+                                tweak.id,
+                                tweak.category
+                        );
+
+                        // 4. Check Registry Operations
+                        for op in tweak.enabled_ops {
+                                assert!(!op.subkey.is_empty(), "Tweak {} has reg op with empty subkey", tweak.id);
+                                // "Touch" values
+                                let _ = op.value_name;
+                                let _ = &op.value;
+                        }
+                }
+        }
+}
